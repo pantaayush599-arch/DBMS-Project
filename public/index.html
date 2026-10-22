@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inventory & Stock Management</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside>
+    <h1>Inventory<span>&amp; Stock</span></h1>
+    <nav id="nav">
+      <a data-view="dashboard">Dashboard</a>
+      <div class="group">Operations</div>
+      <a data-view="stock">Stock</a>
+      <a data-view="purchase-orders">Purchase Orders</a>
+      <a data-view="sales-orders">Sales Orders</a>
+      <div class="group">Master Data</div>
+      <a data-view="products">Products</a>
+      <a data-view="categories">Categories</a>
+      <a data-view="suppliers">Suppliers</a>
+      <a data-view="warehouses">Warehouses</a>
+      <a data-view="customers">Customers</a>
+      <div class="group">Analysis</div>
+      <a data-view="reports">Reports</a>
+    </nav>
+  </aside>
+  <main>
+    <header>
+      <h2 id="title"></h2>
+      <div id="toolbar"></div>
+    </header>
+    <section id="content"></section>
+  </main>
+
+  <dialog id="dialog">
+    <form id="form" method="dialog">
+      <h3 id="form-title"></h3>
+      <div id="form-fields"></div>
+      <p id="form-hint" class="hint"></p>
+      <p id="form-error" class="error"></p>
+      <div class="form-actions">
+        <button type="button" id="form-cancel" class="secondary">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
