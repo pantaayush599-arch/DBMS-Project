@@ -4,8 +4,9 @@ const express = require('express');
 const { query, call } = require('../db');
 const { HttpError } = require('../errors');
 const { pick, id } = require('../validate');
+const { allow } = require('../auth');
 
-function buildOrderRouter({ table, view, pk, label, partyField, priceField, actions, statuses }) {
+function buildOrderRouter({ table, view, pk, label, partyField, priceField, actions, statuses, roles }) {
   const router = express.Router();
 
   const fields = {
@@ -39,7 +40,7 @@ function buildOrderRouter({ table, view, pk, label, partyField, priceField, acti
     res.json(rows[0]);
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', allow(...roles), async (req, res) => {
     const data = pick(req.body, fields);
     if (data[priceField] === undefined) data[priceField] = null;
     if (data[partyField] === undefined) data[partyField] = null;
@@ -50,7 +51,7 @@ function buildOrderRouter({ table, view, pk, label, partyField, priceField, acti
   });
 
   for (const [action, procedure] of Object.entries(actions)) {
-    router.post(`/:id/${action}`, async (req, res) => {
+    router.post(`/:id/${action}`, allow(...roles), async (req, res) => {
       const key = id(req.params.id);
       await call(procedure, [key]);
       const [row] = await query(`SELECT * FROM ${view} WHERE ${pk} = ?`, [key]);
@@ -58,7 +59,7 @@ function buildOrderRouter({ table, view, pk, label, partyField, priceField, acti
     });
   }
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', allow('Admin'), async (req, res) => {
     const result = await query(`DELETE FROM ${table} WHERE ${pk} = ?`, [id(req.params.id)]);
     if (!result.affectedRows) throw new HttpError(404, `${label} not found`);
     res.status(204).end();
@@ -73,6 +74,7 @@ router.use('/purchase-orders', buildOrderRouter({
   table: 'purchase_order', view: 'v_purchase_order_details', pk: 'PO_ID', label: 'Purchase order',
   partyField: 'Supplier_ID', priceField: 'Unit_Cost',
   statuses: ['Pending', 'Received', 'Cancelled'],
+  roles: ['Admin', 'Purchase Manager'],
   actions: { receive: 'sp_receive_purchase_order', cancel: 'sp_cancel_purchase_order' },
 }));
 
@@ -80,6 +82,7 @@ router.use('/sales-orders', buildOrderRouter({
   table: 'sales_order', view: 'v_sales_order_details', pk: 'SO_ID', label: 'Sales order',
   partyField: 'Customer_ID', priceField: 'Unit_Price',
   statuses: ['Pending', 'Shipped', 'Cancelled'],
+  roles: ['Admin', 'Sales Staff'],
   actions: { ship: 'sp_ship_sales_order', cancel: 'sp_cancel_sales_order' },
 }));
 

@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const { query } = require('./db');
 const { errorHandler } = require('./errors');
+const { requireAuth, allow } = require('./auth');
 
 const app = express();
 app.use(express.json());
@@ -12,6 +13,11 @@ app.get('/api/health', async (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api/auth', require('./routes/auth'));
+
+// Everything below requires a logged-in user.
+app.use('/api', requireAuth);
+app.use('/api/users', allow('Admin'), require('./routes/users'));
 app.use('/api', require('./routes/master'));
 app.use('/api', require('./routes/orders'));
 app.use('/api/stock', require('./routes/stock'));

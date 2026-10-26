@@ -1,6 +1,7 @@
 const express = require('express');
 const { query, call } = require('../db');
 const { pick, id } = require('../validate');
+const { allow } = require('../auth');
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.get('/available', async (req, res) => {
 });
 
 // Move stock between warehouses (atomic, via stored procedure).
-router.post('/transfer', async (req, res) => {
+router.post('/transfer', allow('Admin', 'Purchase Manager'), async (req, res) => {
   const data = pick(req.body, {
     Product_ID: { type: 'int', required: true },
     From_Warehouse_ID: { type: 'int', required: true },

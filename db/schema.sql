@@ -2,9 +2,10 @@
 --  Inventory and Stock Management System — MySQL 8 schema
 --  CSE-SY DBMS Mini Project (Batch B1)
 --
---  8 relations in 3NF:
+--  8 business relations in 3NF:
 --    category, supplier, warehouse, customer, product, stock,
 --    purchase_order, sales_order
+--  plus app_user (staff logins and roles for the web application).
 --
 --  The business rules are enforced inside the database (constraints,
 --  triggers, stored procedures), so they hold for every client — the
@@ -154,6 +155,27 @@ CREATE TABLE sales_order (
         REFERENCES warehouse (Warehouse_ID) ON UPDATE CASCADE ON DELETE RESTRICT,
     INDEX idx_so_status (Status),
     INDEX idx_so_date (Order_Date)
+) ENGINE = InnoDB;
+
+
+-- ---------------------------------------------------------------------
+--  9. App_User(User_ID PK, Full_Name, Email, Password_Hash, Role,
+--              Is_Active, Created_At, Last_Login)
+--     Staff accounts for the web application (not part of the business
+--     data model). Passwords are stored as salted scrypt hashes.
+--     Roles: Admin | Purchase Manager | Sales Staff | Viewer
+-- ---------------------------------------------------------------------
+CREATE TABLE app_user (
+    User_ID        INT          AUTO_INCREMENT PRIMARY KEY,
+    Full_Name      VARCHAR(100) NOT NULL,
+    Email          VARCHAR(100) NOT NULL,
+    Password_Hash  VARCHAR(200) NOT NULL,
+    Role           ENUM('Admin','Purchase Manager','Sales Staff','Viewer') NOT NULL DEFAULT 'Viewer',
+    Is_Active      BOOLEAN      NOT NULL DEFAULT TRUE,
+    Created_At     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    Last_Login     TIMESTAMP    NULL,
+    CONSTRAINT uq_app_user_email UNIQUE (Email),
+    CONSTRAINT chk_app_user_email CHECK (Email LIKE '%_@_%._%')
 ) ENGINE = InnoDB;
 
 
@@ -356,6 +378,29 @@ BEFORE DELETE ON sales_order FOR EACH ROW
 BEGIN
     IF OLD.Status = 'Shipped' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'A shipped sales order cannot be deleted';
+    END IF;
+END$$
+
+
+-- ---------- APP USER: there must always be at least one active Admin ---
+CREATE TRIGGER trg_user_before_update
+BEFORE UPDATE ON app_user FOR EACH ROW
+BEGIN
+    IF OLD.Role = 'Admin' AND OLD.Is_Active
+       AND (NEW.Role <> 'Admin' OR NOT NEW.Is_Active)
+       AND (SELECT COUNT(*) FROM app_user
+             WHERE Role = 'Admin' AND Is_Active AND User_ID <> OLD.User_ID) = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'At least one active Admin account is required';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_user_before_delete
+BEFORE DELETE ON app_user FOR EACH ROW
+BEGIN
+    IF OLD.Role = 'Admin' AND OLD.Is_Active
+       AND (SELECT COUNT(*) FROM app_user
+             WHERE Role = 'Admin' AND Is_Active AND User_ID <> OLD.User_ID) = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'At least one active Admin account is required';
     END IF;
 END$$
 

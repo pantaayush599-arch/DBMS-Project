@@ -4,10 +4,15 @@ const express = require('express');
 const { query } = require('../db');
 const { HttpError } = require('../errors');
 const { pick, id } = require('../validate');
+const { allow } = require('../auth');
+
+// Who may create/edit each table (everyone logged in can read; only Admin deletes).
+const BUYING = ['Admin', 'Purchase Manager'];
+const SELLING = ['Admin', 'Sales Staff'];
 
 const entities = {
   categories: {
-    table: 'category', pk: 'Category_ID', label: 'Category',
+    table: 'category', pk: 'Category_ID', label: 'Category', write: BUYING,
     fields: {
       Category_Name: { type: 'string', required: true, max: 60 },
       Description: { type: 'string', max: 255 },
@@ -16,7 +21,7 @@ const entities = {
     order: 'Category_Name',
   },
   suppliers: {
-    table: 'supplier', pk: 'Supplier_ID', label: 'Supplier',
+    table: 'supplier', pk: 'Supplier_ID', label: 'Supplier', write: BUYING,
     fields: {
       Supplier_Name: { type: 'string', required: true, max: 100 },
       Contact_Person: { type: 'string', max: 100 },
@@ -28,7 +33,7 @@ const entities = {
     order: 'Supplier_Name',
   },
   warehouses: {
-    table: 'warehouse', pk: 'Warehouse_ID', label: 'Warehouse',
+    table: 'warehouse', pk: 'Warehouse_ID', label: 'Warehouse', write: ['Admin'],
     // listing comes from the utilization view so the UI can show usage
     listFrom: 'v_warehouse_utilization',
     fields: {
@@ -40,7 +45,7 @@ const entities = {
     order: 'Warehouse_Name',
   },
   customers: {
-    table: 'customer', pk: 'Customer_ID', label: 'Customer',
+    table: 'customer', pk: 'Customer_ID', label: 'Customer', write: SELLING,
     fields: {
       Customer_Name: { type: 'string', required: true, max: 100 },
       Phone: { type: 'string', max: 20 },
@@ -51,7 +56,7 @@ const entities = {
     order: 'Customer_Name',
   },
   products: {
-    table: 'product', pk: 'Product_ID', label: 'Product',
+    table: 'product', pk: 'Product_ID', label: 'Product', write: BUYING,
     listFrom: 'v_product_details',
     fields: {
       Product_Name: { type: 'string', required: true, max: 100 },
@@ -91,14 +96,14 @@ function buildRouter(cfg) {
     res.json(rows[0]);
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', allow(...cfg.write), async (req, res) => {
     const data = pick(req.body, cfg.fields);
     const result = await query(`INSERT INTO ${cfg.table} SET ?`, [data]);
     const [row] = await query(`SELECT * FROM ${source} WHERE ${cfg.pk} = ?`, [result.insertId]);
     res.status(201).json(row);
   });
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', allow(...cfg.write), async (req, res) => {
     const key = id(req.params.id);
     const data = pick(req.body, cfg.fields, { partial: true });
     if (!Object.keys(data).length) throw new HttpError(400, 'No fields to update');
@@ -108,7 +113,7 @@ function buildRouter(cfg) {
     res.json(row);
   });
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', allow('Admin'), async (req, res) => {
     const result = await query(`DELETE FROM ${cfg.table} WHERE ${cfg.pk} = ?`, [id(req.params.id)]);
     if (!result.affectedRows) throw new HttpError(404, `${cfg.label} not found`);
     res.status(204).end();

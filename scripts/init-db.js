@@ -47,6 +47,7 @@ async function main() {
   });
   const dbName = process.env.DB_NAME || 'inventory_db';
   const files = process.argv.includes('--no-seed') ? ['schema.sql'] : ['schema.sql', 'seed.sql'];
+  if (process.argv.includes('--with-roles')) files.push('roles.sql'); // needs CREATE ROLE / CREATE USER privileges
   for (const file of files) {
     let sql = fs.readFileSync(path.join(__dirname, '..', 'db', file), 'utf8');
     if (dbName !== 'inventory_db') sql = sql.replace(/\binventory_db\b/g, dbName);

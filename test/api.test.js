@@ -15,11 +15,13 @@ const { pool } = require('../src/db');
 
 let server;
 let base;
+let adminToken;
 
 before(async () => {
   server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://localhost:${server.address().port}/api`;
+  adminToken = await login('admin@inventory.demo', 'Admin@123');
 });
 
 after(async () => {
@@ -27,14 +29,20 @@ after(async () => {
   await pool.end();
 });
 
-async function api(method, url, body) {
-  const res = await fetch(base + url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+async function api(method, url, body, token = adminToken) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(base + url, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const data = res.status === 204 ? null : await res.json();
   return { status: res.status, data };
+}
+
+async function login(Email, Password) {
+  const res = await fetch(`${base}/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ Email, Password }),
+  });
+  assert.equal(res.status, 200, `login ${Email}`);
+  return (await res.json()).token;
 }
 
 async function stockOf(productId, warehouseId) {
@@ -166,4 +174,66 @@ test('reports return data', async () => {
     assert.equal(res.status, 200, r);
     assert.ok(Array.isArray(res.data) && res.data.length > 0, r);
   }
+});
+
+test('authentication: login required, bad credentials and tampered tokens rejected', async () => {
+  assert.equal((await api('GET', '/products', null, null)).status, 401);
+  assert.equal((await api('GET', '/products', null, 'garbage.token')).status, 401);
+  assert.equal((await api('GET', '/products', null, adminToken + 'x')).status, 401);
+  const bad = await fetch(`${base}/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ Email: 'admin@inventory.demo', Password: 'wrong' }),
+  });
+  assert.equal(bad.status, 401);
+  const me = await api('GET', '/auth/me');
+  assert.equal(me.data.Role, 'Admin');
+});
+
+test('role permissions', async () => {
+  const purchase = await login('purchase@inventory.demo', 'Purchase@123');
+  const sales = await login('sales@inventory.demo', 'Sales@123');
+  const viewer = await login('viewer@inventory.demo', 'Viewer@123');
+  const po = { Product_ID: 5, Warehouse_ID: 3, Quantity: 1 };
+  const so = { Customer_ID: 1, Product_ID: 5, Warehouse_ID: 3, Quantity: 1 };
+
+  // everyone can read
+  for (const t of [purchase, sales, viewer]) {
+    assert.equal((await api('GET', '/stock', null, t)).status, 200);
+    assert.equal((await api('GET', '/reports/dashboard', null, t)).status, 200);
+  }
+  // purchase manager: purchase orders yes, sales orders no
+  const created = await api('POST', '/purchase-orders', po, purchase);
+  assert.equal(created.status, 201);
+  assert.equal((await api('POST', `/purchase-orders/${created.data.PO_ID}/receive`, null, purchase)).status, 200);
+  assert.equal((await api('POST', '/sales-orders', so, purchase)).status, 403);
+  // sales staff: sales orders yes, purchase orders / transfers no
+  assert.equal((await api('POST', '/sales-orders', so, sales)).status, 201);
+  assert.equal((await api('POST', '/purchase-orders', po, sales)).status, 403);
+  assert.equal((await api('POST', '/stock/transfer', { Product_ID: 5, From_Warehouse_ID: 3, To_Warehouse_ID: 1, Quantity: 1 }, sales)).status, 403);
+  // viewer: read only
+  assert.equal((await api('POST', '/purchase-orders', po, viewer)).status, 403);
+  assert.equal((await api('POST', '/customers', { Customer_Name: 'X' }, viewer)).status, 403);
+  // only admin deletes and manages users
+  assert.equal((await api('DELETE', '/customers/1', null, sales)).status, 403);
+  assert.equal((await api('GET', '/users', null, purchase)).status, 403);
+  assert.equal((await api('GET', '/users')).status, 200);
+});
+
+test('user management and last-admin protection', async () => {
+  const u = await api('POST', '/users', { Full_Name: 'Temp', Email: 'temp@inventory.demo', Role: 'Viewer', Password: 'secret1' });
+  assert.equal(u.status, 201);
+  assert.equal(u.data.Password_Hash, undefined, 'hash never returned');
+  await login('temp@inventory.demo', 'secret1');
+  assert.equal((await api('POST', '/users', { Full_Name: 'B', Email: 'b@inventory.demo', Role: 'Boss', Password: 'secret1' })).status, 400);
+
+  const tempToken = await login('temp@inventory.demo', 'secret1');
+  await api('PUT', `/users/${u.data.User_ID}`, { Is_Active: 0 });
+  assert.equal((await api('GET', '/products', null, tempToken)).status, 401, 'deactivated user is locked out at once');
+
+  const me = await api('GET', '/auth/me');
+  const demote = await api('PUT', `/users/${me.data.User_ID}`, { Role: 'Viewer' });
+  assert.equal(demote.status, 400);
+  assert.match(demote.data.error, /active Admin/);
+  assert.equal((await api('DELETE', `/users/${me.data.User_ID}`)).status, 400);
+  assert.equal((await api('DELETE', `/users/${u.data.User_ID}`)).status, 204);
 });

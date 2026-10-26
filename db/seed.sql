@@ -81,3 +81,14 @@ INSERT INTO sales_order (Customer_ID, Product_ID, Warehouse_ID, Quantity, Unit_P
 
 -- Ship the first 11 SOs -> triggers deduct stock
 UPDATE sales_order SET Status = 'Shipped' WHERE SO_ID BETWEEN 1 AND 11;
+
+-- Demo staff accounts (one per role). Passwords are stored as scrypt hashes.
+--   admin@inventory.demo     / Admin@123     (Admin)
+--   purchase@inventory.demo  / Purchase@123  (Purchase Manager)
+--   sales@inventory.demo     / Sales@123     (Sales Staff)
+--   viewer@inventory.demo    / Viewer@123    (Viewer)
+INSERT INTO app_user (Full_Name, Email, Password_Hash, Role) VALUES
+ ('Aayush Pant',    'admin@inventory.demo',    'scrypt$d1710c8d729b9cf7d8c6dfca7b3789f8$aa34a6b42d95f32eedba0423129ae4b36a8e414055169b71bb1281a6c83b5b4aeda6e4f044ce3d7a2616af210402e9a4647f6de6be5ac473c32e1bb1b449d7e7', 'Admin'),
+ ('Aryan Manurkar', 'purchase@inventory.demo', 'scrypt$c5d423924e6fccf7b9960d4bfa965eb4$c1beec50d0cd321baa87e7763e7ce69eb0230861479ef978df4adc5a311cb58d2dbb1412a968bc7450134245be18d732651f4dc5ff7fcaacfe969e2607cc2682', 'Purchase Manager'),
+ ('Manas Patani',   'sales@inventory.demo',    'scrypt$6bc68f244f43c5a08e9abcf4fcd40ad6$42b59dd0b7615f1c25782afa30fc0f5cc0fb23c8b1fd63b40054fede5f0ff37e69e5544477d96fdc3c2f2be987b844bb92ac0fcdfd3c730f3079c6d5b1e7c31b', 'Sales Staff'),
+ ('Accounts Team',  'viewer@inventory.demo',   'scrypt$6ec79950ecc15c05291ff06a55c18d5f$380a7b34486ad8dd8a9f4678602ee2e246e2e38d22ea1cc9abaec29446d117083be84e28808df629f6be6366771a39ed4d8f040b5f83a9449e438ebddf347989', 'Viewer');

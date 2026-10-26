@@ -86,6 +86,14 @@ router.get('/monthly', async (req, res) => {
      ORDER BY m.Month`));
 });
 
+// Count of orders in each status, for both order types.
+router.get('/order-status', async (req, res) => {
+  res.json(await query(`
+    SELECT 'Purchase' AS Order_Type, Status, COUNT(*) AS Orders FROM purchase_order GROUP BY Status
+    UNION ALL
+    SELECT 'Sales', Status, COUNT(*) FROM sales_order GROUP BY Status`));
+});
+
 router.get('/warehouse-utilization', async (req, res) => {
   res.json(await query('SELECT * FROM v_warehouse_utilization ORDER BY Warehouse_Name'));
 });
