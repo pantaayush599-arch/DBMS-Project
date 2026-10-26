@@ -88,6 +88,10 @@ mysql -u root -p < db/seed.sql
 
 `npm run db:init` **drops and recreates** `inventory_db`. Use `npm run db:init -- --no-seed` for an empty database.
 
+### Deploying online
+
+See **[DEPLOY.md](DEPLOY.md)** for step-by-step Railway instructions. In short: connect the GitHub repo, add a MySQL database, and set `MYSQL_URL`. The app creates its tables on first start.
+
 ### MySQL-level roles (optional)
 
 `db/roles.sql` creates the same four roles inside MySQL with `CREATE ROLE` / `GRANT`, plus one MySQL login per role. This lets you show access control directly in the MySQL CLI:
@@ -160,9 +164,11 @@ db/
   seed.sql          sample data + demo accounts (stock is built by receiving POs through the triggers)
   roles.sql         optional MySQL roles/GRANTs + one MySQL login per role
   demo.sql          step-by-step demo for the mysql CLI
-scripts/init-db.js  runs schema.sql + seed.sql (handles DELIMITER)
+scripts/init-db.js  drops and rebuilds the database (npm run db:init)
 src/
   app.js, server.js
+  config.js         connection settings (DB_* variables or MYSQL_URL)
+  init.js           runs the SQL files (handles DELIMITER); auto-creates an empty database on start
   db.js             connection pool
   auth.js           password hashing, signed tokens, role checks
   errors.js         maps MySQL errors (SIGNAL, FK, CHECK, duplicate) to HTTP errors
